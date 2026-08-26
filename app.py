@@ -3,6 +3,7 @@ from agent.core import AccountabilityAgent
 from agent.ai import AccountabilityAI
 
 
+
 initialize_database()
 
 agent = AccountabilityAgent()
@@ -350,7 +351,7 @@ while True:
 
     elif choice == "10":
 
-        agent.accountability_report()
+        agent.daily_plan()
 
     # ==============================
     # TODAY'S PLAN
@@ -358,7 +359,7 @@ while True:
 
     elif choice == "11":
 
-        agent.daily_plan()
+        agent.get_actionable_recommendations()
 
     # ==============================
     # ACTIONABLE RECOMMENDATIONS
@@ -366,7 +367,14 @@ while True:
 
     elif choice == "12":
 
-        agent.get_actionable_recommendations()
+        agent.accountability_report()
+
+        goals = agent.get_accountability_data()
+
+        ai_response = ai.analyze(goals)
+
+        print("\n")
+        print(ai_response)
 
     # ==============================
     # EXIT
