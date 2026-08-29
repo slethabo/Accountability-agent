@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 class AccountabilityAI:
 
     def __init__(self):
@@ -13,62 +16,53 @@ class AccountabilityAI:
                 "Add a goal to get started."
             )
 
-        response = []
+        today = datetime.now().date()
 
-        response.append(
-            "ACCOUNTABILITY CHECK"
-        )
-        response.append(
-            "===================="
-        )
-
-        active_goals = 0
-        incomplete_tasks = 0
+        active_goals = []
+        total_tasks = 0
         completed_tasks = 0
 
-        for goal in goals:
-
-            if goal["completed"]:
-                continue
-
-            active_goals += 1
-
-            tasks = goal["tasks"]
-
-            for task in tasks:
-
-                if task[2] == 0:
-                    incomplete_tasks += 1
-                else:
-                    completed_tasks += 1
-
-        response.append(
-            f"\nYou currently have "
-            f"{active_goals} active goals."
-        )
-
-        response.append(
-            f"Tasks: {completed_tasks} completed, "
-            f"{incomplete_tasks} incomplete."
-        )
-
-        response.append(
-            "\nWHAT NEEDS ATTENTION"
-        )
-        response.append(
-            "---------------------"
-        )
-
-        recommendation_number = 1
+        # =================================
+        # COLLECT GOAL INFORMATION
+        # =================================
 
         for goal in goals:
 
             if goal["completed"]:
                 continue
 
-            goal_name = goal["goal"]
-            due_date = goal["due_date"]
             tasks = goal["tasks"]
+
+            total_tasks += len(tasks)
+
+            completed_tasks += sum(
+                1
+                for task in tasks
+                if task[2] == 1
+            )
+
+            due_date = None
+
+            if goal["due_date"]:
+
+                try:
+
+                    due_date = datetime.strptime(
+                        goal["due_date"],
+                        "%Y-%m-%d"
+                    ).date()
+
+                except ValueError:
+
+                    due_date = None
+
+            days_remaining = None
+
+            if due_date:
+
+                days_remaining = (
+                    due_date - today
+                ).days
 
             unfinished_tasks = [
                 task
@@ -76,46 +70,162 @@ class AccountabilityAI:
                 if task[2] == 0
             ]
 
-            # Goal has no tasks
-            if not tasks:
+            active_goals.append(
+                {
+                    "goal": goal["goal"],
+                    "priority": goal["priority"],
+                    "due_date": goal["due_date"],
+                    "days_remaining": days_remaining,
+                    "tasks": tasks,
+                    "unfinished_tasks": unfinished_tasks
+                }
+            )
 
-                response.append(
-                    f"\n{recommendation_number}. "
-                    f"{goal_name}"
-                )
+        # =================================
+        # CALCULATE URGENCY
+        # =================================
 
-                response.append(
-                    "   This goal has no tasks."
-                )
+        for item in active_goals:
 
-                if due_date:
+            days = item["days_remaining"]
+
+            # Deadline is the primary factor.
+            # Lower score means higher urgency.
+
+            if days is not None:
+
+                if days < 0:
+
+                    score = 1
+
+                elif days == 0:
+
+                    score = 2
+
+                elif days <= 3:
+
+                    score = 3
+
+                elif days <= 7:
+
+                    score = 4
+
+                elif days <= 14:
+
+                    score = 5
+
+                else:
+
+                    score = 6
+
+            else:
+
+                # No deadline
+                score = 7
+
+            # Priority is a secondary factor.
+
+            score += (
+                item["priority"] * 0.1
+            )
+
+            # An unfinished task makes the goal
+            # slightly more actionable.
+
+            if item["unfinished_tasks"]:
+
+                score -= 0.05
+
+            item["score"] = score
+
+        # =================================
+        # SORT BY URGENCY
+        # =================================
+
+        active_goals.sort(
+            key=lambda item: item["score"]
+        )
+
+        # =================================
+        # BUILD RESPONSE
+        # =================================
+
+        response = []
+
+        response.append(
+            "ACCOUNTABILITY CHECK"
+        )
+
+        response.append(
+            "===================="
+        )
+
+        response.append(
+            f"\nActive goals: "
+            f"{len(active_goals)}"
+        )
+
+        response.append(
+            f"Tasks completed: "
+            f"{completed_tasks}/"
+            f"{total_tasks}"
+        )
+
+        # =================================
+        # PRIORITY CHECK
+        # =================================
+
+        response.append(
+            "\nPRIORITY CHECK"
+        )
+
+        response.append(
+            "--------------"
+        )
+
+        for index, item in enumerate(
+            active_goals[:3],
+            start=1
+        ):
+
+            response.append(
+                f"\n{index}. "
+                f"{item['goal']}"
+            )
+
+            days = item["days_remaining"]
+
+            if days is not None:
+
+                if days < 0:
 
                     response.append(
-                        f"   Deadline: {due_date}"
+                        "   Status: OVERDUE"
                     )
 
+                elif days == 0:
+
                     response.append(
-                        "   Action: Break this goal "
-                        "into smaller tasks."
+                        "   Status: DUE TODAY"
                     )
 
                 else:
 
                     response.append(
-                        "   Action: Create a "
-                        "specific first task."
+                        f"   Due in "
+                        f"{days} days"
                     )
 
-                recommendation_number += 1
-
-            # Goal has unfinished tasks
-            elif unfinished_tasks:
-
-                next_task = unfinished_tasks[0]
+            else:
 
                 response.append(
-                    f"\n{recommendation_number}. "
-                    f"{goal_name}"
+                    "   No deadline set"
+                )
+
+            if item["unfinished_tasks"]:
+
+                next_task = (
+                    item["unfinished_tasks"][0]
                 )
 
                 response.append(
@@ -123,65 +233,89 @@ class AccountabilityAI:
                     f"{next_task[1]}"
                 )
 
-                recommendation_number += 1
+            else:
 
-        if recommendation_number == 1:
+                response.append(
+                    "   Action: Break this "
+                    "goal into tasks."
+                )
 
-            response.append(
-                "\nEverything currently has "
-                "an actionable task."
-            )
+        # =================================
+        # MAIN RECOMMENDATION
+        # =================================
+
+        top = active_goals[0]
 
         response.append(
             "\nMAIN RECOMMENDATION"
         )
+
         response.append(
             "-------------------"
         )
 
-        # Find the first goal with unfinished work
-        for goal in goals:
+        response.append(
+            f"\nFocus on: "
+            f"{top['goal']}"
+        )
 
-            if goal["completed"]:
-                continue
+        days = top["days_remaining"]
 
-            tasks = goal["tasks"]
+        if days is not None:
 
-            unfinished_tasks = [
-                task
-                for task in tasks
-                if task[2] == 0
-            ]
-
-            if unfinished_tasks:
+            if days < 0:
 
                 response.append(
-                    f"\nFocus on: {goal['goal']}"
+                    "Reason: This goal is overdue."
                 )
+
+            elif days == 0:
 
                 response.append(
-                    f"Start with: "
-                    f"{unfinished_tasks[0][1]}"
+                    "Reason: This goal is due today."
                 )
 
-                break
+            elif days <= 7:
+
+                response.append(
+                    f"Reason: This goal is due "
+                    f"in {days} days."
+                )
+
+            else:
+
+                response.append(
+                    f"Reason: This goal is due "
+                    f"in {days} days."
+                )
 
         else:
 
-            for goal in goals:
+            response.append(
+                "Reason: This goal has no "
+                "deadline but requires attention."
+            )
 
-                if not goal["completed"]:
+        if top["unfinished_tasks"]:
 
-                    response.append(
-                        f"\nFocus on: "
-                        f"{goal['goal']}"
-                    )
+            next_task = (
+                top["unfinished_tasks"][0]
+            )
 
-                    response.append(
-                        "Start by breaking this "
-                        "goal into tasks."
-                    )
+            response.append(
+                f"Start with: "
+                f"{next_task[1]}"
+            )
 
-                    break
+        else:
+
+            response.append(
+                "Start by breaking this "
+                "goal into smaller tasks."
+            )
+
+        response.append(
+            "\n===================="
+        )
 
         return "\n".join(response)
