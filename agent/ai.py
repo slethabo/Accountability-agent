@@ -6,6 +6,10 @@ class AccountabilityAI:
     def __init__(self):
         pass
 
+    # =================================
+    # MAIN ANALYSIS
+    # =================================
+
     def analyze(self, goals):
 
         if not goals:
@@ -46,14 +50,12 @@ class AccountabilityAI:
             if goal["due_date"]:
 
                 try:
-
                     due_date = datetime.strptime(
                         goal["due_date"],
                         "%Y-%m-%d"
                     ).date()
 
                 except ValueError:
-
                     due_date = None
 
             days_remaining = None
@@ -72,6 +74,7 @@ class AccountabilityAI:
 
             active_goals.append(
                 {
+                    "id": goal["id"],
                     "goal": goal["goal"],
                     "priority": goal["priority"],
                     "due_date": goal["due_date"],
@@ -89,57 +92,48 @@ class AccountabilityAI:
 
             days = item["days_remaining"]
 
-            # Deadline is the primary factor.
-            # Lower score means higher urgency.
+            # Lower score = higher urgency.
 
             if days is not None:
 
                 if days < 0:
-
                     score = 1
 
                 elif days == 0:
-
                     score = 2
 
                 elif days <= 3:
-
                     score = 3
 
                 elif days <= 7:
-
                     score = 4
 
                 elif days <= 14:
-
                     score = 5
 
                 else:
-
                     score = 6
 
             else:
 
-                # No deadline
                 score = 7
 
-            # Priority is a secondary factor.
+            # Priority acts as a secondary factor.
 
             score += (
                 item["priority"] * 0.1
             )
 
-            # An unfinished task makes the goal
-            # slightly more actionable.
+            # Goals with unfinished tasks
+            # are slightly more actionable.
 
             if item["unfinished_tasks"]:
-
                 score -= 0.05
 
             item["score"] = score
 
         # =================================
-        # SORT BY URGENCY
+        # SORT GOALS
         # =================================
 
         active_goals.sort(
@@ -147,7 +141,7 @@ class AccountabilityAI:
         )
 
         # =================================
-        # BUILD RESPONSE
+        # BUILD ACCOUNTABILITY CHECK
         # =================================
 
         response = []
@@ -230,7 +224,7 @@ class AccountabilityAI:
 
                 response.append(
                     f"   Next action: "
-                    f"{next_task[1]}"
+                    f"{next_task[1].strip()}"
                 )
 
             else:
@@ -304,7 +298,7 @@ class AccountabilityAI:
 
             response.append(
                 f"Start with: "
-                f"{next_task[1]}"
+                f"{next_task[1].strip()}"
             )
 
         else:
@@ -319,3 +313,144 @@ class AccountabilityAI:
         )
 
         return "\n".join(response)
+
+    # =================================
+    # STRUCTURED RECOMMENDATIONS
+    # =================================
+
+    def get_recommendations(self, goals):
+
+        if not goals:
+            return []
+
+        today = datetime.now().date()
+
+        recommendations = []
+
+        for goal in goals:
+
+            if goal["completed"]:
+                continue
+
+            due_date = None
+
+            if goal["due_date"]:
+
+                try:
+                    due_date = datetime.strptime(
+                        goal["due_date"],
+                        "%Y-%m-%d"
+                    ).date()
+
+                except ValueError:
+                    due_date = None
+
+            days_remaining = None
+
+            if due_date:
+
+                days_remaining = (
+                    due_date - today
+                ).days
+
+            unfinished_tasks = [
+                task
+                for task in goal["tasks"]
+                if task[2] == 0
+            ]
+
+            # =================================
+            # DETERMINE URGENCY
+            # =================================
+
+            if days_remaining is not None:
+
+                if days_remaining < 0:
+
+                    urgency = "HIGH"
+                    reason = "OVERDUE"
+
+                elif days_remaining == 0:
+
+                    urgency = "HIGH"
+                    reason = "DUE TODAY"
+
+                elif days_remaining <= 3:
+
+                    urgency = "HIGH"
+                    reason = (
+                        f"DUE IN "
+                        f"{days_remaining} DAYS"
+                    )
+
+                elif days_remaining <= 7:
+
+                    urgency = "MEDIUM"
+                    reason = (
+                        f"DUE IN "
+                        f"{days_remaining} DAYS"
+                    )
+
+                else:
+
+                    urgency = "LOW"
+                    reason = "UPCOMING"
+
+            else:
+
+                urgency = "MEDIUM"
+                reason = "NO DEADLINE"
+
+            # =================================
+            # DETERMINE ACTION
+            # =================================
+
+            if unfinished_tasks:
+
+                action = (
+                    unfinished_tasks[0][1].strip()
+                )
+
+            else:
+
+                action = (
+                    "Break this goal into "
+                    "smaller tasks."
+                )
+
+            recommendations.append(
+                {
+                    "goal_id": goal["id"],
+                    "goal": goal["goal"],
+                    "priority": goal["priority"],
+                    "due_date": goal["due_date"],
+                    "days_remaining": days_remaining,
+                    "urgency": urgency,
+                    "reason": reason,
+                    "action": action
+                }
+            )
+
+        # =================================
+        # SORT RECOMMENDATIONS
+        # =================================
+
+        urgency_order = {
+            "HIGH": 1,
+            "MEDIUM": 2,
+            "LOW": 3
+        }
+
+        recommendations.sort(
+            key=lambda item: (
+                urgency_order[
+                    item["urgency"]
+                ],
+                item["priority"],
+                item["days_remaining"]
+                if item["days_remaining"] is not None
+                else 9999
+            )
+        )
+
+        return recommendations
