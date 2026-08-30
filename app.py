@@ -1,6 +1,7 @@
 from agent.database import initialize_database
 from agent.core import AccountabilityAgent
 from agent.ai import AccountabilityAI
+from agent.email import send_email
 
 
 
@@ -375,6 +376,11 @@ while True:
 
         print("\n")
         print(ai_response)
+
+        send_email(
+            "Accountability Agent Check",
+            ai_response
+        )
 
     # ==============================
     # EXIT
