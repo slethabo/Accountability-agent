@@ -297,3 +297,173 @@ class AccountabilityAI:
         )
 
         return "\n".join(response)
+        # ==============================
+    # NATURAL LANGUAGE QUERY
+    # ==============================
+
+    def respond_to_query(self, query, goals):
+
+        query = query.lower().strip()
+
+        recommendations = self.get_recommendations(
+            goals
+        )
+
+        if not recommendations:
+
+            return (
+                "You currently have no active goals."
+            )
+
+        # ------------------------------
+        # What should I work on?
+        # ------------------------------
+
+        if (
+            "what should i work on" in query
+            or "what should i do" in query
+            or "what do i work on" in query
+        ):
+
+            top = recommendations[0]
+
+            response = (
+                f"Focus on: {top['goal']}\n"
+            )
+
+            days = top["days_remaining"]
+
+            if days is not None:
+
+                if days < 0:
+
+                    response += (
+                        "This goal is overdue.\n"
+                    )
+
+                elif days == 0:
+
+                    response += (
+                        "This goal is due today.\n"
+                    )
+
+                elif days <= 7:
+
+                    response += (
+                        f"This goal is due "
+                        f"in {days} days.\n"
+                    )
+
+            if top["unfinished_tasks"]:
+
+                next_task = (
+                    top["unfinished_tasks"][0]
+                )
+
+                response += (
+                    f"Start with: "
+                    f"{next_task[1]}"
+                )
+
+            else:
+
+                response += (
+                    "Start by breaking this "
+                    "goal into smaller tasks."
+                )
+
+            return response
+
+        # ------------------------------
+        # What's overdue?
+        # ------------------------------
+
+        if (
+            "what is overdue" in query
+            or "what's overdue" in query
+            or "overdue" in query
+        ):
+
+            overdue = []
+
+            for item in recommendations:
+
+                days = item["days_remaining"]
+
+                if days is not None and days < 0:
+
+                    overdue.append(item)
+
+            if not overdue:
+
+                return "You currently have no overdue goals."
+
+            response = "OVERDUE GOALS\n\n"
+
+            for item in overdue:
+
+                response += (
+                    f"- {item['goal']}\n"
+                )
+
+            return response.rstrip()
+
+        # ------------------------------
+        # How am I doing?
+        # ------------------------------
+
+        if (
+            "how am i doing" in query
+            or "my progress" in query
+            or "how am i progressing" in query
+        ):
+
+            total_tasks = 0
+            completed_tasks = 0
+
+            for goal in goals:
+
+                if goal["completed"]:
+                    continue
+
+                tasks = goal["tasks"]
+
+                total_tasks += len(tasks)
+
+                completed_tasks += sum(
+                    1
+                    for task in tasks
+                    if task[2] == 1
+                )
+
+            if total_tasks == 0:
+
+                progress = 0
+
+            else:
+
+                progress = int(
+                    (
+                        completed_tasks
+                        / total_tasks
+                    ) * 100
+                )
+
+            return (
+                f"You have "
+                f"{completed_tasks}/"
+                f"{total_tasks} tasks complete "
+                f"({progress}%)."
+            )
+
+        # ------------------------------
+        # Unknown query
+        # ------------------------------
+
+        return (
+            "I don't understand that yet.\n"
+            "Try asking:\n"
+            "- What should I work on?\n"
+            "- What's overdue?\n"
+            "- How am I doing?"
+        )
